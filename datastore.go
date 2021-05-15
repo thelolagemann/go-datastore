@@ -104,7 +104,7 @@ func marshalRecords(in interface{}, out interface{}) error {
 
 func (d *DataStore) save() error {
 	// write to temp file in case error
-	f, err := os.OpenFile(d.f.Name()+"_temp", os.O_RDWR|os.O_CREATE, 0755)
+	f, err := os.OpenFile(os.TempDir() + d.f.Name(), os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
 		return err
 	}
@@ -125,10 +125,6 @@ func (d *DataStore) save() error {
 	if _, err := io.Copy(d.f, f); err != nil {
 		return err
 	}
-
-	// delete temp file
-	_ = f.Close()
-	_ = os.Remove(d.f.Name() + "_temp")
 
 	return nil
 }
