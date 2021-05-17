@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 )
 
 const (
@@ -104,7 +105,7 @@ func marshalRecords(in interface{}, out interface{}) error {
 
 func (d *DataStore) save() error {
 	// write to temp file in case error
-	f, err := os.OpenFile(os.TempDir() + d.f.Name(), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
+	f, err := os.OpenFile(filepath.Join(os.TempDir(), d.f.Name()), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
 	if err != nil {
 		return err
 	}
