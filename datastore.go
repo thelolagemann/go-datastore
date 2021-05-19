@@ -5,7 +5,7 @@ package datastore
 
 import (
 	"encoding/json"
-	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -21,13 +21,15 @@ const (
 // StoreType the type of store
 type StoreType int
 
-var (
-	// ErrNoRecord error returned when record with key doesn't exist
-	ErrNoRecord = errors.New("record doesn't exist")
-	// ErrInvalidDataStore error returned when provided data store type is invalid.
-	ErrInvalidDataStore = errors.New("invalid data store")
-)
 
+type NoRecordError struct {
+	key string
+	store string
+}
+
+func (n NoRecordError) Error() string {
+	return fmt.Sprintf("key %v doesn't exist in the %v store", n.key, n.store)
+}
 
 // Storer is the interface that wraps an implementation of a data
 // store. Implementations must be capable of both retrieving and
@@ -54,7 +56,7 @@ func (d *Store) Delete(key string) error {
 		delete(d.records, key)
 		return nil
 	}
-	return ErrNoRecord
+	return NoRecordError{key, d.StoreName}
 }
 
 // Read reads the record from the data store with key, and marshals
@@ -65,7 +67,7 @@ func (d *Store) Read(key string, bind interface{}) error {
 		return marshalRecords(v, &bind)
 	}
 
-	return ErrNoRecord
+	return NoRecordError{key, d.StoreName}
 }
 
 // ReadAll reads all of the values from d.records, and marshals the
@@ -132,8 +134,11 @@ func (d *Store) save() error {
 type Config struct {
 	// SaveOnWrite if true every write call will flush the store to stable storage
 	 SaveOnWrite bool
-
 	 StoreType
+
+	 // StoreName is the name assigned to the store. If no name is provided,
+	 // then the name will be derived from the file name.
+	 StoreName string
 
 	 // Log generic logging interface
 	 Log Logger
@@ -162,7 +167,7 @@ func New(path string, config *Config) (*Store, error) {
 		dS.Storer = YAMLDataStore{}
 
 	default:
-		return nil, ErrInvalidDataStore
+		return nil, fmt.Errorf("unsupported store type: %v", config.StoreType)
 	}
 
 	// read records into store
@@ -173,6 +178,11 @@ func New(path string, config *Config) (*Store, error) {
 	// setup logging
 	if config.Log == nil {
 		config.Log = &noLogger{}
+	}
+
+	// configure name
+	if config.StoreName == "" {
+		config.StoreName = dS.f.Name()
 	}
 
 	return dS, nil
