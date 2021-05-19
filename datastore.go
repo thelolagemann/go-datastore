@@ -39,8 +39,7 @@ type Storer interface {
 // DataStore is the base object that values are read and written
 // from.
 type DataStore struct {
-	storeOnWrite bool
-
+	*DataStoreConfig
 	records map[string]interface{}
 
 	f *os.File
@@ -78,7 +77,7 @@ func (d *DataStore) ReadAll(bind interface{}) error {
 // Write writes the value of bind into the data store with key.
 func (d *DataStore) Write(key string, bind interface{}) error {
 	d.records[key] = bind
-	if d.storeOnWrite {
+	if d.SaveOnWrite {
 		return d.save()
 	}
 	return nil
@@ -130,10 +129,20 @@ func (d *DataStore) save() error {
 	return nil
 }
 
+type DataStoreConfig struct {
+	// SaveOnWrite if true every write call will flush the store to stable storage
+	 SaveOnWrite bool
+
+	 StoreType
+
+	 // Log generic logging interface
+	 Log Logger
+}
+
 // New creates or opens an existing DataStore of type d, at the provided
 // path. If storeOnWrite is true, every DataStore.Write() call will flush the
 // contents of the data store to disk.
-func New(d StoreType, path string, storeOnWrite bool) (*DataStore, error) {
+func New(path string, config *DataStoreConfig) (*DataStore, error) {
 	// open the store
 	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
@@ -141,12 +150,12 @@ func New(d StoreType, path string, storeOnWrite bool) (*DataStore, error) {
 	}
 
 	var dS = &DataStore{
-		storeOnWrite: storeOnWrite,
+		DataStoreConfig: config,
 		f:            f,
 		records:      map[string]interface{}{},
 	}
 
-	switch d {
+	switch config.StoreType {
 	case JSONStore:
 		dS.Storer = JSONDataStore{}
 	case YAMLStore:
@@ -156,8 +165,14 @@ func New(d StoreType, path string, storeOnWrite bool) (*DataStore, error) {
 		return nil, ErrInvalidDataStore
 	}
 
+	// read records into store
 	if err := dS.Open(f, dS.records); err != nil {
 		return nil, err
+	}
+
+	// setup logging
+	if config.Log == nil {
+		config.Log = &noLogger{}
 	}
 
 	return dS, nil
