@@ -28,6 +28,7 @@ var (
 	ErrInvalidDataStore = errors.New("invalid data store")
 )
 
+
 // Storer is the interface that wraps an implementation of a data
 // store. Implementations must be capable of both retrieving and
 // storing raw data, via the Open and Store methods respectively.
@@ -36,20 +37,19 @@ type Storer interface {
 	Store(in map[string]interface{}, w io.Writer) error
 }
 
-// DataStore is the base object that values are read and written
+// Store is the base object that values are read and written
 // from.
-type DataStore struct {
-	*DataStoreConfig
-	records map[string]interface{}
-
-	f *os.File
-
+type Store struct {
+	*Config
 	Storer
+
+	records map[string]interface{}
+	f *os.File
 }
 
 // Delete deletes the record with key from the data store. If
 // no record can be found, an ErrNoKey will be returned.
-func (d *DataStore) Delete(key string) error {
+func (d *Store) Delete(key string) error {
 	if _, ok := d.records[key]; ok {
 		delete(d.records, key)
 		return nil
@@ -60,7 +60,7 @@ func (d *DataStore) Delete(key string) error {
 // Read reads the record from the data store with key, and marshals
 // the value into bind. If no record can be found, an ErrNoKey
 // will be returned.
-func (d *DataStore) Read(key string, bind interface{}) error {
+func (d *Store) Read(key string, bind interface{}) error {
 	if v, ok := d.records[key]; ok {
 		return marshalRecords(v, &bind)
 	}
@@ -70,12 +70,12 @@ func (d *DataStore) Read(key string, bind interface{}) error {
 
 // ReadAll reads all of the values from d.records, and marshals the
 // values into bind.
-func (d *DataStore) ReadAll(bind interface{}) error {
+func (d *Store) ReadAll(bind interface{}) error {
 	return marshalRecords(d.records, bind)
 }
 
 // Write writes the value of bind into the data store with key.
-func (d *DataStore) Write(key string, bind interface{}) error {
+func (d *Store) Write(key string, bind interface{}) error {
 	d.records[key] = bind
 	if d.SaveOnWrite {
 		return d.save()
@@ -85,7 +85,7 @@ func (d *DataStore) Write(key string, bind interface{}) error {
 
 // Close flushes the contents of the data store to the underlying
 // file, and then closes any remaining file handles.
-func (d *DataStore) Close() error {
+func (d *Store) Close() error {
 	if err := d.save(); err != nil {
 		return err
 	}
@@ -102,7 +102,7 @@ func marshalRecords(in interface{}, out interface{}) error {
 	return json.Unmarshal(b, out)
 }
 
-func (d *DataStore) save() error {
+func (d *Store) save() error {
 	// write to temp file in case error
 	f, err := os.OpenFile(filepath.Join(os.TempDir(), d.f.Name()), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
 	if err != nil {
@@ -129,7 +129,7 @@ func (d *DataStore) save() error {
 	return nil
 }
 
-type DataStoreConfig struct {
+type Config struct {
 	// SaveOnWrite if true every write call will flush the store to stable storage
 	 SaveOnWrite bool
 
@@ -139,18 +139,18 @@ type DataStoreConfig struct {
 	 Log Logger
 }
 
-// New creates or opens an existing DataStore of type d, at the provided
-// path. If storeOnWrite is true, every DataStore.Write() call will flush the
+// New creates or opens an existing Store of type d, at the provided
+// path. If storeOnWrite is true, every Store.Write() call will flush the
 // contents of the data store to disk.
-func New(path string, config *DataStoreConfig) (*DataStore, error) {
+func New(path string, config *Config) (*Store, error) {
 	// open the store
 	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
 		return nil, err
 	}
 
-	var dS = &DataStore{
-		DataStoreConfig: config,
+	var dS = &Store{
+		Config: config,
 		f:            f,
 		records:      map[string]interface{}{},
 	}
