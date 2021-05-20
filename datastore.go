@@ -31,6 +31,15 @@ func (n NoRecordError) Error() string {
 	return fmt.Sprintf("key %v doesn't exist in the %v store", n.key, n.store)
 }
 
+type RecordExistsError struct {
+	key string
+	store string
+}
+
+func (r RecordExistsError) Error() string {
+	return fmt.Sprintf("key %v already exists in the %v store", r.key, r.store)
+}
+
 // Storer is the interface that wraps an implementation of a data
 // store. Implementations must be capable of both retrieving and
 // storing raw data, via the Open and Store methods respectively.
@@ -78,6 +87,11 @@ func (d *Store) ReadAll(bind interface{}) error {
 
 // Write writes the value of bind into the data store with key.
 func (d *Store) Write(key string, bind interface{}) error {
+	if !d.OverwriteExisting {
+		if _, ok := d.records[key]; ok {
+			return RecordExistsError{key, d.StoreName}
+		}
+	}
 	d.records[key] = bind
 	if d.SaveOnWrite {
 		return d.save()
@@ -140,8 +154,8 @@ type Config struct {
 	 // then the name will be derived from the file name.
 	 StoreName string
 
-	 // Log generic logging interface
-	 Log Logger
+	 // OverwriteExisting if true then records will be overwritten if existing.
+	 OverwriteExisting bool
 }
 
 // New creates or opens an existing Store of type d, at the provided
@@ -173,11 +187,6 @@ func New(path string, config *Config) (*Store, error) {
 	// read records into store
 	if err := dS.Open(f, dS.records); err != nil {
 		return nil, err
-	}
-
-	// setup logging
-	if config.Log == nil {
-		config.Log = &noLogger{}
 	}
 
 	// configure name
