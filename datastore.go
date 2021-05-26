@@ -21,7 +21,6 @@ const (
 // StoreType the type of store
 type StoreType int
 
-
 type NoRecordError struct {
 	key string
 	store string
